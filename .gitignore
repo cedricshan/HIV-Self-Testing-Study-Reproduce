@@ -1,0 +1,18 @@
+# R
+.Rhistory
+.Rdata
+.RData
+.Ruserdata
+*.Rproj.user/
+
+# Quarto
+/.quarto/
+*_files/
+*_cache/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# HTML output (optional - remove if you want to include rendered results)
+# *.html

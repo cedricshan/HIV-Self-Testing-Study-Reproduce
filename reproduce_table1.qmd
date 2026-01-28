@@ -1,0 +1,373 @@
+---
+title: "Reproduce Table 1 - HIV Self-Testing Study"
+author: "Case Study 1"
+format: 
+  html:
+    toc: true
+    toc-depth: 3
+    code-fold: false
+    embed-resources: true
+execute:
+  warning: false
+  message: false
+---
+
+## Overview
+
+This document reproduces Table 1 from the manuscript.
+
+Table 1 presents sociodemographic and behavioral characteristics of N=254 participants in the per-protocol sample.
+
+```{r}
+#| label: load-libraries
+
+library(tidyverse)
+library(knitr)
+library(kableExtra)
+```
+
+## Read and Filter Data
+
+```{r}
+#| label: read-data
+
+# Read the raw data
+raw_data <- read.csv("data/CTN_FINAL.csv", stringsAsFactors = FALSE)
+
+# Check total observations
+cat("Total observations in raw data:", nrow(raw_data), "\n")
+
+# Filter to per-protocol sample:
+# 1. PO_FLAG == "Include" (excludes participants enrolled when not all sites were active)
+# 2. WAVE != "3" (excludes Wave 3 due to COVID-19 pandemic)
+df <- raw_data %>%
+  filter(PO_FLAG == "Include", WAVE != "3")
+
+cat("Per-protocol sample size:", nrow(df), "\n")
+```
+
+
+## Create Derived Variables
+```{r}
+# Create analysis dataset with derived variables
+analysis_df <- df %>%
+  mutate(
+    # Age (already numeric)
+    age = as.numeric(Q3_1),
+    
+    # Ethnicity: Hispanic/Latinx
+    ethnicity_hispanic = ifelse(Q5_1 == "1", "Hispanic/Latinx", "Not Hispanic/Latinx"),
+    
+    # Race: Need to handle multiracial (comma-separated values)
+    race = case_when(
+      grepl(",", Q5_3) ~ "Multiracial",
+      Q5_3 == "24" ~ "Black or African American",
+      Q5_3 == "23" ~ "White",
+      Q5_3 == "28" ~ "Other",
+      Q5_3 == "25" ~ "American Indian or Alaskan Native",
+      Q5_3 == "26" ~ "Asian",
+      Q5_3 == "27" ~ "Native Hawaiian or Pacific Islander",
+      Q5_3 == "" ~ NA_character_,
+      TRUE ~ "Other"
+    ),
+    
+    # PrEP History
+    prep_history = case_when(
+      Q6_2 == "3" ~ "Never taken PrEP",
+      Q6_2 == "1" ~ "In the past 6 months",
+      TRUE ~ NA_character_
+    ),
+    
+    # Number of sex partners (numeric)
+    sex_partners = as.numeric(Q11_2),
+    
+    # Condom use
+    condom_use = case_when(
+      Q11_3 == "1" ~ "Never",
+      Q11_3 == "2" ~ "Sometimes",
+      Q11_3 == "3" ~ "About half the time",
+      Q11_3 == "4" ~ "Most of the time",
+      Q11_3 == "5" ~ "Always",
+      TRUE ~ NA_character_
+    ),
+    
+    # Condomless receptive anal sex
+    condomless_anal = ifelse(Q11_4 == "1", "Yes", "No"),
+    
+    # Ever tested for HIV
+    ever_tested_hiv = ifelse(Q11_5 == "1", "Yes", "No"),
+    
+    # Months since last HIV test (for those who tested)
+    months_since_test = as.numeric(LAST_HIV_TEST_MONTHS),
+    months_since_test = ifelse(months_since_test == 9999, NA, months_since_test),
+    
+    # Reasons for not testing (for those who never tested)
+    reason_not_tested = case_when(
+      Q11_7 == "1" ~ "Unlikely to be exposed to HIV",
+      Q11_7 == "2" ~ "Afraid of testing HIV-positive",
+      Q11_7 == "3" ~ "Did not want to think about HIV/HIV-positive",
+      Q11_7 == "4" ~ "Worried about names being reported if positive",
+      Q11_7 == "5" ~ "Dislike for needles",
+      Q11_7 == "6" ~ "Unable to trust that the results will be confidential",
+      Q11_7 == "7" ~ "Unaware of where to get tested",
+      Q11_7 == "8" ~ "Other reasons",
+      TRUE ~ NA_character_
+    )
+  )
+
+# Set factor levels for ordered display
+analysis_df$condom_use <- factor(analysis_df$condom_use, 
+                                  levels = c("Never", "Sometimes", "About half the time", 
+                                            "Most of the time", "Always"))
+
+analysis_df$race <- factor(analysis_df$race,
+                           levels = c("American Indian or Alaskan Native", 
+                                     "Black or African American", "White", 
+                                     "Other", "Multiracial"))
+```
+
+## Reproduce Table 1
+```{r}
+
+# Function to calculate n (%) for categorical variables
+calc_n_pct <- function(x, total_n = NULL) {
+  if (is.null(total_n)) total_n <- sum(!is.na(x))
+  n <- sum(!is.na(x) & x == TRUE)
+  pct <- round(n / total_n * 100, 1)
+  paste0(n, " (", pct, ")")
+}
+
+# Function for frequency table
+freq_table <- function(data, var, total_n = nrow(data)) {
+  data %>%
+    filter(!is.na(!!sym(var))) %>%
+    count(!!sym(var)) %>%
+    mutate(pct = round(n / total_n * 100, 1),
+           value = paste0(n, " (", pct, ")")) %>%
+    select(!!sym(var), value)
+}
+
+# Function for median (IQR)
+median_iqr <- function(x) {
+  x <- x[!is.na(x)]
+  med <- median(x)
+  q1 <- quantile(x, 0.25)
+  q3 <- quantile(x, 0.75)
+  paste0(round(med), " (", round(q1), "-", round(q3), ")")
+}
+```
+
+### Calculate Statistics
+
+```{r}
+#| label: calculate-stats
+
+n_total <- nrow(analysis_df)
+cat("Total N:", n_total, "\n\n")
+
+# --- Age ---
+cat("Age in years, median (IQR):", median_iqr(analysis_df$age), "\n")
+
+# --- Ethnicity ---
+cat("\nEthnicity:\n")
+n_hispanic <- sum(analysis_df$ethnicity_hispanic == "Hispanic/Latinx", na.rm = TRUE)
+pct_hispanic <- round(n_hispanic / n_total * 100, 1)
+cat("  Hispanic/Latinx:", n_hispanic, "(", pct_hispanic, ")\n")
+
+# --- Race ---
+cat("\nRace:\n")
+race_table <- analysis_df %>%
+  filter(!is.na(race)) %>%
+  count(race) %>%
+  mutate(pct = round(n / n_total * 100, 1))
+print(race_table)
+
+# --- PrEP History ---
+cat("\nHistory of PrEP uptake:\n")
+prep_table <- analysis_df %>%
+  filter(!is.na(prep_history)) %>%
+  count(prep_history) %>%
+  mutate(pct = round(n / n_total * 100, 1))
+print(prep_table)
+
+# --- Sex Partners ---
+cat("\nNumber of male sex partners in past 90 days, median (IQR):", 
+    median_iqr(analysis_df$sex_partners), "\n")
+
+# --- Condom Use ---
+cat("\nCondom use:\n")
+condom_table <- analysis_df %>%
+  filter(!is.na(condom_use)) %>%
+  count(condom_use) %>%
+  mutate(pct = round(n / n_total * 100, 1))
+print(condom_table)
+
+# --- Condomless Anal Sex ---
+cat("\nCondomless receptive anal sex in past 90 days:\n")
+n_condomless <- sum(analysis_df$condomless_anal == "Yes", na.rm = TRUE)
+pct_condomless <- round(n_condomless / n_total * 100, 1)
+cat("  Yes:", n_condomless, "(", pct_condomless, ")\n")
+
+# --- Ever Tested for HIV ---
+cat("\nEver tested for HIV during lifetime:\n")
+n_tested <- sum(analysis_df$ever_tested_hiv == "Yes", na.rm = TRUE)
+pct_tested <- round(n_tested / n_total * 100, 1)
+cat("  Yes:", n_tested, "(", pct_tested, ")\n")
+
+# --- Months Since Last HIV Test (among those tested) ---
+tested_df <- analysis_df %>% filter(ever_tested_hiv == "Yes")
+cat("\nMonths since last HIV test (among tested), median (IQR):", 
+    median_iqr(tested_df$months_since_test), "\n")
+
+# --- Not Tested for HIV ---
+n_not_tested <- sum(analysis_df$ever_tested_hiv == "No", na.rm = TRUE)
+pct_not_tested <- round(n_not_tested / n_total * 100, 1)
+cat("\nIf not tested for HIV:", n_not_tested, "(", pct_not_tested, "%)\n")
+
+# --- Reasons for Not Testing ---
+cat("\nMain reasons cited for not getting tested (among", n_not_tested, "participants):\n")
+not_tested_df <- analysis_df %>% filter(ever_tested_hiv == "No")
+reason_table <- not_tested_df %>%
+  filter(!is.na(reason_not_tested)) %>%
+  count(reason_not_tested) %>%
+  mutate(pct = round(n / n_not_tested * 100, 1)) %>%
+  arrange(desc(n))
+print(reason_table)
+```
+
+## Formatted Table 1
+
+```{r}
+#| label: formatted-table
+
+# Create formatted Table 1
+table1_data <- tibble(
+  Characteristic = c(
+    "Age in years, median (IQR)",
+    "",
+    "Ethnicity, n (%)",
+    "  Hispanic/Latinx",
+    "",
+    "Race, n (%)",
+    "  American Indian or Alaskan Native",
+    "  Black or African American",
+    "  White",
+    "  Other",
+    "  Multiracial",
+    "",
+    "History of PrEP uptake, n (%)",
+    "  Never taken PrEP",
+    "  In the past 6 months",
+    "",
+    "Number of male sex partners in past 90 days, median (IQR)",
+    "",
+    "Condom use, n (%)",
+    "  Never",
+    "  Sometimes",
+    "  About half the time",
+    "  Most of the time",
+    "  Always",
+    "",
+    "Condomless receptive anal sex in past 90 days, n (%)",
+    "",
+    "Ever tested for HIV during lifetime, n (%)",
+    "",
+    "If tested for HIV, median (IQR)",
+    "  Months since last HIV test",
+    "",
+    "If not tested for HIV, n (%)",
+    "",
+    "Main reasons cited for not getting tested, n (%)",
+    "  Unlikely to be exposed to HIV",
+    "  Afraid of testing HIV-positive",
+    "  Did not want to think about HIV/HIV-positive",
+    "  Worried about names being reported if positive",
+    "  Dislike for needles",
+    "  Unable to trust that the results will be confidential",
+    "  Unaware of where to get tested",
+    "  Other reasons"
+  ),
+  Value = c(
+    # Age
+    median_iqr(analysis_df$age),
+    "",
+    # Ethnicity header
+    "",
+    paste0(n_hispanic, " (", pct_hispanic, ")"),
+    "",
+    # Race header
+    "",
+    paste0(sum(analysis_df$race == "American Indian or Alaskan Native", na.rm = TRUE), " (", 
+           round(sum(analysis_df$race == "American Indian or Alaskan Native", na.rm = TRUE)/n_total*100, 1), ")"),
+    paste0(sum(analysis_df$race == "Black or African American", na.rm = TRUE), " (", 
+           round(sum(analysis_df$race == "Black or African American", na.rm = TRUE)/n_total*100, 1), ")"),
+    paste0(sum(analysis_df$race == "White", na.rm = TRUE), " (", 
+           round(sum(analysis_df$race == "White", na.rm = TRUE)/n_total*100, 1), ")"),
+    paste0(sum(analysis_df$race == "Other", na.rm = TRUE), " (", 
+           round(sum(analysis_df$race == "Other", na.rm = TRUE)/n_total*100, 1), ")"),
+    paste0(sum(analysis_df$race == "Multiracial", na.rm = TRUE), " (", 
+           round(sum(analysis_df$race == "Multiracial", na.rm = TRUE)/n_total*100, 1), ")"),
+    "",
+    # PrEP header
+    "",
+    paste0(sum(analysis_df$prep_history == "Never taken PrEP", na.rm = TRUE), " (", 
+           round(sum(analysis_df$prep_history == "Never taken PrEP", na.rm = TRUE)/n_total*100, 1), ")"),
+    paste0(sum(analysis_df$prep_history == "In the past 6 months", na.rm = TRUE), " (", 
+           round(sum(analysis_df$prep_history == "In the past 6 months", na.rm = TRUE)/n_total*100, 1), ")"),
+    "",
+    # Sex partners
+    median_iqr(analysis_df$sex_partners),
+    "",
+    # Condom use header
+    "",
+    paste0(sum(analysis_df$condom_use == "Never", na.rm = TRUE), " (", 
+           round(sum(analysis_df$condom_use == "Never", na.rm = TRUE)/n_total*100, 1), ")"),
+    paste0(sum(analysis_df$condom_use == "Sometimes", na.rm = TRUE), " (", 
+           round(sum(analysis_df$condom_use == "Sometimes", na.rm = TRUE)/n_total*100, 1), ")"),
+    paste0(sum(analysis_df$condom_use == "About half the time", na.rm = TRUE), " (", 
+           round(sum(analysis_df$condom_use == "About half the time", na.rm = TRUE)/n_total*100, 1), ")"),
+    paste0(sum(analysis_df$condom_use == "Most of the time", na.rm = TRUE), " (", 
+           round(sum(analysis_df$condom_use == "Most of the time", na.rm = TRUE)/n_total*100, 1), ")"),
+    paste0(sum(analysis_df$condom_use == "Always", na.rm = TRUE), " (", 
+           round(sum(analysis_df$condom_use == "Always", na.rm = TRUE)/n_total*100, 1), ")"),
+    "",
+    # Condomless anal
+    paste0(n_condomless, " (", pct_condomless, ")"),
+    "",
+    # Ever tested
+    paste0(n_tested, " (", pct_tested, ")"),
+    "",
+    # Months since test header
+    "",
+    median_iqr(tested_df$months_since_test),
+    "",
+    # Not tested
+    paste0(n_not_tested, " (", pct_not_tested, "%)"),
+    "",
+    # Reasons header
+    "",
+    paste0(sum(not_tested_df$reason_not_tested == "Unlikely to be exposed to HIV", na.rm = TRUE), " (", 
+           round(sum(not_tested_df$reason_not_tested == "Unlikely to be exposed to HIV", na.rm = TRUE)/n_not_tested*100, 1), ")"),
+    paste0(sum(not_tested_df$reason_not_tested == "Afraid of testing HIV-positive", na.rm = TRUE), " (", 
+           round(sum(not_tested_df$reason_not_tested == "Afraid of testing HIV-positive", na.rm = TRUE)/n_not_tested*100, 1), ")"),
+    paste0(sum(not_tested_df$reason_not_tested == "Did not want to think about HIV/HIV-positive", na.rm = TRUE), " (", 
+           round(sum(not_tested_df$reason_not_tested == "Did not want to think about HIV/HIV-positive", na.rm = TRUE)/n_not_tested*100, 1), ")"),
+    paste0(sum(not_tested_df$reason_not_tested == "Worried about names being reported if positive", na.rm = TRUE), " (", 
+           round(sum(not_tested_df$reason_not_tested == "Worried about names being reported if positive", na.rm = TRUE)/n_not_tested*100, 1), ")"),
+    paste0(sum(not_tested_df$reason_not_tested == "Dislike for needles", na.rm = TRUE), " (", 
+           round(sum(not_tested_df$reason_not_tested == "Dislike for needles", na.rm = TRUE)/n_not_tested*100, 1), ")"),
+    paste0(sum(not_tested_df$reason_not_tested == "Unable to trust that the results will be confidential", na.rm = TRUE), " (", 
+           round(sum(not_tested_df$reason_not_tested == "Unable to trust that the results will be confidential", na.rm = TRUE)/n_not_tested*100, 1), ")"),
+    paste0(sum(not_tested_df$reason_not_tested == "Unaware of where to get tested", na.rm = TRUE), " (", 
+           round(sum(not_tested_df$reason_not_tested == "Unaware of where to get tested", na.rm = TRUE)/n_not_tested*100, 1), ")"),
+    paste0(sum(not_tested_df$reason_not_tested == "Other reasons", na.rm = TRUE), " (", 
+           round(sum(not_tested_df$reason_not_tested == "Other reasons", na.rm = TRUE)/n_not_tested*100, 1), ")")
+  )
+)
+
+# Display table
+kable(table1_data, 
+      caption = paste0("Table 1. Summary of population sociodemographic and behavioral characteristics (N=", n_total, ")"),
+      col.names = c("Characteristic", "Value")) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+```
