@@ -1,6 +1,5 @@
 ---
 title: "Reproduce Table 1 - HIV Self-Testing Study"
-author: "Case Study 1"
 format: 
   html:
     toc: true
@@ -11,9 +10,6 @@ execute:
   warning: false
   message: false
 ---
-
-## Overview
-
 This document reproduces Table 1 from the manuscript.
 
 Table 1 presents sociodemographic and behavioral characteristics of N=254 participants in the per-protocol sample.

@@ -1,0 +1,246 @@
+---
+title: "Primary Analysis - Poisson Model for HIV Test Kit Orders"
+format: 
+  html:
+    toc: true
+    toc-depth: 3
+    code-fold: false
+    embed-resources: true
+execute:
+  warning: false
+  message: false
+---
+
+## Load Libraries
+
+```{r}
+#| label: load-libraries
+
+library(tidyverse)
+library(knitr)
+library(emmeans)  # For pairwise comparisons
+
+# Optional: kableExtra for nicer tables
+if (requireNamespace("kableExtra", quietly = TRUE)) {
+  library(kableExtra)
+  use_kableExtra <- TRUE
+} else {
+  use_kableExtra <- FALSE
+}
+```
+
+## Data Preparation
+
+```{r}
+#| label: read-data
+
+# Read the raw data
+raw_data <- read.csv("data/CTN_FINAL.csv", stringsAsFactors = FALSE)
+
+# Filter to per-protocol sample
+df <- raw_data %>%
+  filter(PO_FLAG == "Include", WAVE != "3")
+
+cat("Per-protocol sample size:", nrow(df), "\n")
+```
+
+```{r}
+#| label: create-analysis-data
+
+# Create variables for analysis
+analysis_df <- df %>%
+  mutate(
+    # Map WAVE: 1 and 4 in data -> Wave 1 in paper; 2 -> Wave 2
+    paper_wave = case_when(
+      WAVE %in% c("1", "4") ~ "1",
+      WAVE == "2" ~ "2"
+    ),
+    # Site name
+    site = SITE,
+    # Test kit ordered within 60 days (binary)
+    ordered = ifelse(ORA_WITHIN60_YESNO == "Yes", 1, 0),
+    # Platform type
+    platform_type = case_when(
+      site %in% c("Facebook", "Instagram") ~ "Social Media",
+      site %in% c("Grindr", "Jack'd") ~ "Dating App",
+      site %in% c("Google", "Bing") ~ "Information Search"
+    )
+  )
+
+# Verify wave mapping
+cat("Wave distribution:\n")
+print(table(analysis_df$paper_wave, analysis_df$site))
+```
+
+## Reproduce Table 2
+
+```{r}
+#| label: table2
+
+# Number of days for each wave (from manuscript)
+days_wave1 <- 70
+days_wave2 <- 38
+
+# Aggregate data by site and wave
+site_wave_summary <- analysis_df %>%
+  group_by(site, paper_wave, platform_type) %>%
+  summarise(
+    n_participants = n(),
+    n_ordered = sum(ordered),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    days = ifelse(paper_wave == "1", days_wave1, days_wave2),
+    order_rate = round(n_ordered / days, 2)
+  )
+
+# Add Bing (0 participants enrolled, 0 orders)
+# This is needed to match the manuscript Table 2
+bing_row <- tibble(
+  site = "Bing",
+  paper_wave = "2",
+  platform_type = "Information Search",
+  n_participants = 0,
+  n_ordered = 0,
+  days = days_wave2,
+  order_rate = 0.00
+)
+
+site_wave_summary <- bind_rows(site_wave_summary, bing_row)
+
+# Display Table 2
+table2 <- site_wave_summary %>%
+  arrange(platform_type, paper_wave) %>%
+  select(
+    `Platform Type` = platform_type,
+    Site = site,
+    Wave = paper_wave,
+    `Days` = days,
+    `Test Kits Ordered` = n_ordered,
+    `Order Rate (kits/day)` = order_rate
+  )
+
+kable(table2, caption = "Table 2. Number and rate of HIV home self-test kits ordered by platform and wave (N=254)")
+```
+
+### Summary by Platform Type
+
+```{r}
+#| label: platform-summary
+
+# Summary by platform type
+platform_summary <- site_wave_summary %>%
+  group_by(platform_type) %>%
+  summarise(
+    total_days = sum(days),
+    total_ordered = sum(n_ordered),
+    overall_rate = round(total_ordered / unique(days)[1], 2),  # per wave
+    .groups = "drop"
+  )
+
+# Calculate overall rate as total orders / total days per platform
+platform_summary <- site_wave_summary %>%
+  group_by(platform_type) %>%
+  summarise(
+    total_ordered = sum(n_ordered),
+    total_days = sum(days),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    overall_rate = round(total_ordered / total_days, 2)
+  )
+
+cat("\nSummary by Platform Type:\n")
+print(platform_summary)
+
+cat("\nTotal test kits ordered:", sum(site_wave_summary$n_ordered), "of", nrow(analysis_df), "participants\n")
+cat("Overall percentage:", round(sum(site_wave_summary$n_ordered) / nrow(analysis_df) * 100, 1), "%\n")
+```
+
+## Poisson Regression Model
+
+Based on the SAS code in Appendix 1, the model is:
+
+$$\log(o_{ij}) = \log(t_i) + \alpha + \beta_i + \gamma_j + (\beta\gamma)_{ij}$$
+
+Where:
+- $o_{ij}$ is the number of kits ordered in Wave $i$, platform type $j$
+- $t_i$ is the time (days) that Wave $i$ platforms were recruiting
+- $\beta_i$ is the main effect of wave
+- $\gamma_j$ is the main effect of platform type
+- $(\beta\gamma)_{ij}$ is the wave × platform interaction
+
+The rate for any cell is: $rate_{ij} = \exp(\alpha + \beta_i + \gamma_j + (\beta\gamma)_{ij})$
+
+```{r}
+#| label: prepare-poisson-data
+model_data <- data.frame(
+  row = factor(c(1, 1, 1, 2, 2, 2)),  # Wave
+  col = factor(c("A", "B", "C", "A", "B", "C")),  # Platform type
+  site = c("Facebook", "Grindr", "Google", "Instagram", "Jack'd", "Bing"),
+  o = c(13, 9, 17, 13, 125, 0),  # Orders (from Table 2)
+  t = c(70, 70, 70, 38, 38, 38)  # Days
+)
+model_data$lt <- log(model_data$t)
+```
+
+### Fit Poisson Model
+
+```{r}
+#| label: fit-poisson
+
+# Model with 5 cells (excluding Bing)
+model_data_no_bing <- model_data %>% filter(site != "Bing")
+
+poisson_model <- glm(
+  o ~ row * col,
+  family = poisson(link = "log"),
+  offset = lt,
+  data = model_data_no_bing
+)
+
+cat("Model Summary (excluding Bing):\n")
+summary(poisson_model)
+```
+
+### Full Model Including Bing (for reference)
+
+```{r}
+#| label: fit-poisson-full
+
+# Try fitting with all 6 cells - may have convergence warnings due to 0 count
+poisson_model_full <- glm(
+  o ~ row * col,
+  family = poisson(link = "log"),
+  offset = lt,
+  data = model_data
+)
+
+cat("\nModel Summary (all 6 cells, may have convergence issues):\n")
+summary(poisson_model_full)
+```
+
+### Estimated Rates
+
+```{r}
+#| label: estimated-rates
+
+emm_full <- emmeans(poisson_model_full, ~ row * col, type = "response", offset = 0)
+
+cat("Estimated Cell Rates (from model):\n")
+emm_summary <- summary(emm_full)
+print(emm_summary)
+
+# 正确合并：将 emmeans 结果与 model_data 按 row 和 col 匹配
+emm_df <- as.data.frame(emm_summary) %>%
+  select(row, col, estimated_rate = rate)
+
+rate_comparison <- model_data %>%
+  mutate(observed_rate = round(o / t, 4)) %>%
+  left_join(emm_df, by = c("row", "col")) %>%
+  mutate(estimated_rate = round(estimated_rate, 4)) %>%
+  select(row, col, site, o, t, observed_rate, estimated_rate)
+
+cat("\nObserved vs Model-Estimated Daily Rates:\n")
+print(rate_comparison)
+```
