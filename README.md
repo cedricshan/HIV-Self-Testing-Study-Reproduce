@@ -1,5 +1,17 @@
 # Replication Study: HIV Self-Testing Promotion via Web-Based Platforms
 
+## Interactive Results
+
+View the complete analysis results as interactive HTML pages:
+
+| Analysis | View Online |
+|----------|-------------|
+| Table 1: Participant Characteristics | [View Report](https://yuanshan.github.io/CASE1/result/reproduce_table1.html) |
+| Primary Analysis: Poisson Model | [View Report](https://yuanshan.github.io/CASE1/result/primary_analysis.html) |
+| Secondary Analysis: Attitudes & Stigma | [View Report](https://yuanshan.github.io/CASE1/result/reproduce_secondary_outcomes.html) |
+
+> **Note:** Replace `yuanshan` with your GitHub username and `CASE1` with your repository name after enabling GitHub Pages.
+
 ## Study Overview
 
 This replication study reproduces key findings from Stafylis et al. (2022), which investigated the relative effectiveness of social media sites, dating apps, and information search sites in promoting HIV self-testing among minority men who have sex with men (MSM). The original study enrolled 254 participants through advertisements on platforms including Facebook, Instagram, Grindr, Jack'd, Google, and Bing, offering free HIV home self-test kits to young (18-30 years) Black and Latino MSM at increased risk of HIV infection.
@@ -27,3 +39,15 @@ Stafylis, C., Vavala, G., Wang, Q., McLeman, B., Lemley, S. M., Young, S. D., ..
 National Institute on Drug Abuse Clinical Trials Network. CTN-0083: Comparing Web-based Platforms for Promoting HIV Self-testing. https://ctnlibrary.org/protocol/ctn0083/
 
 R packages used: `tidyverse` for data manipulation, `emmeans` for estimated marginal means and pairwise comparisons (https://cran.r-project.org/web/packages/emmeans/), and `kableExtra` for table formatting.
+
+## How to Enable GitHub Pages
+
+To view the HTML reports as web pages, enable GitHub Pages for this repository:
+
+1. Go to your repository on GitHub
+2. Click **Settings** → **Pages** (in the left sidebar)
+3. Under "Source", select **Deploy from a branch**
+4. Choose **main** branch and **/ (root)** folder
+5. Click **Save**
+
+After a few minutes, your HTML reports will be accessible at `https://[username].github.io/[repo-name]/result/[filename].html`.
