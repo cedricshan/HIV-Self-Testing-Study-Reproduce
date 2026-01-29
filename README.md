@@ -2,15 +2,13 @@
 
 ## Interactive Results
 
-View the complete analysis results as interactive HTML pages:
+View the complete analysis results:
 
 | Analysis | View Online |
 |----------|-------------|
-| Table 1: Participant Characteristics | [View Report](https://yuanshan.github.io/CASE1/result/reproduce_table1.html) |
-| Primary Analysis: Poisson Model | [View Report](https://yuanshan.github.io/CASE1/result/primary_analysis.html) |
-| Secondary Analysis: Attitudes & Stigma | [View Report](https://yuanshan.github.io/CASE1/result/reproduce_secondary_outcomes.html) |
-
-> **Note:** Replace `yuanshan` with your GitHub username and `CASE1` with your repository name after enabling GitHub Pages.
+| Table 1: Participant Characteristics | [View Report](https://htmlpreview.github.io/?https://github.com/cedricshan/HIV-Self-Testing-Study-Reproduce/blob/main/result/reproduce_table1.html) |
+| Primary Analysis: Poisson Model | [View Report](https://htmlpreview.github.io/?https://github.com/cedricshan/HIV-Self-Testing-Study-Reproduce/blob/main/result/primary_analysis.html) |
+| Secondary Analysis: Attitudes & Stigma | [View Report](https://htmlpreview.github.io/?https://github.com/cedricshan/HIV-Self-Testing-Study-Reproduce/blob/main/result/reproduce_secondary_outcomes.html) |
 
 ## Study Overview
 
@@ -40,14 +38,4 @@ National Institute on Drug Abuse Clinical Trials Network. CTN-0083: Comparing We
 
 R packages used: `tidyverse` for data manipulation, `emmeans` for estimated marginal means and pairwise comparisons (https://cran.r-project.org/web/packages/emmeans/), and `kableExtra` for table formatting.
 
-## How to Enable GitHub Pages
 
-To view the HTML reports as web pages, enable GitHub Pages for this repository:
-
-1. Go to your repository on GitHub
-2. Click **Settings** → **Pages** (in the left sidebar)
-3. Under "Source", select **Deploy from a branch**
-4. Choose **main** branch and **/ (root)** folder
-5. Click **Save**
-
-After a few minutes, your HTML reports will be accessible at `https://[username].github.io/[repo-name]/result/[filename].html`.
