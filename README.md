@@ -1,6 +1,6 @@
 # Replication Study: HIV Self-Testing Promotion via Web-Based Platforms
 
-## Interactive Results
+## Results Preview
 
 View the complete analysis results:
 
