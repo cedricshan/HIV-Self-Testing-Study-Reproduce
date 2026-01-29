@@ -1,0 +1,243 @@
+---
+title: "Reproduce Secondary Outcomes - HIV Self-Testing Study"
+format: 
+  html:
+    toc: true
+    toc-depth: 3
+    code-fold: false
+    embed-resources: true
+execute:
+  warning: false
+  message: false
+---
+
+This document reproduces the Secondary Outcomes analyses from Multimedia Appendix 3.
+
+We will reproduce the following key findings:
+
+1. **Q15_5**: "People in my life would leave if I had HIV" - Fisher's exact test
+2. **Q94_13**: "I think that new HIV/AIDS treatments can eradicate the virus from your body" - Wilcoxon rank test
+3. **Q14_3**: "I could not be friends with someone who has HIV/AIDS" - Wilcoxon rank test
+
+```{r}
+#| label: load-libraries
+
+library(tidyverse)
+library(knitr)
+library(kableExtra)
+```
+
+## Data Preparation
+
+```{r}
+#| label: read-data
+
+# Read the raw data
+raw_data <- read.csv("data/CTN_FINAL.csv", stringsAsFactors = FALSE)
+
+# Check total observations
+cat("Total observations in raw data:", nrow(raw_data), "\n")
+
+# Filter to per-protocol sample
+df <- raw_data %>%
+  filter(PO_FLAG == "Include", WAVE != "3")
+
+cat("Per-protocol sample size:", nrow(df), "\n")
+```
+
+## Create Analysis Variables
+
+```{r}
+#| label: create-variables
+
+analysis_df <- df %>%
+  mutate(
+    ordered_kit = case_when(
+      ORA_REDEEMED == "Yes" ~ "Ordered",
+      ORA_REDEEMED %in% c("No", "Over 60 days") ~ "Did not order",
+      TRUE ~ NA_character_
+    )
+  )
+
+# Check the distribution
+cat("\n=== Distribution of Test Kit Orders ===\n")
+table(analysis_df$ordered_kit, useNA = "ifany")
+```
+
+## Analysis 1: Q15_5 - "People in my life would leave if I had HIV"
+
+```{r}
+#| label: analysis-q15-5
+
+# Q15_5: People in my life would leave if I had HIV
+# 1 = Agree, 2 = Disagree
+
+# Create the response variable
+analysis_df <- analysis_df %>%
+  mutate(
+    Q15_5_response = case_when(
+      Q15_5 == 1 ~ "Agree",
+      Q15_5 == 2 ~ "Disagree",
+      TRUE ~ NA_character_
+    )
+  )
+
+# Filter to valid responses for this question
+q15_5_data <- analysis_df %>%
+  filter(!is.na(ordered_kit) & !is.na(Q15_5_response))
+
+
+# Cross-tabulation
+cross_tab <- table(q15_5_data$ordered_kit, q15_5_data$Q15_5_response)
+print(cross_tab)
+
+# Calculate percentages within each group
+cat("\n--- Percentages by group ---\n")
+ordered_data <- q15_5_data %>% filter(ordered_kit == "Ordered")
+not_ordered_data <- q15_5_data %>% filter(ordered_kit == "Did not order")
+
+n_ordered <- nrow(ordered_data)
+n_not_ordered <- nrow(not_ordered_data)
+
+cat("Ordered test kit (n=", n_ordered, "):\n", sep = "")
+cat("  Agree: ", sum(ordered_data$Q15_5_response == "Agree"), "/", n_ordered, 
+    " (", round(sum(ordered_data$Q15_5_response == "Agree")/n_ordered*100, 1), "%)\n", sep = "")
+cat("  Disagree: ", sum(ordered_data$Q15_5_response == "Disagree"), "/", n_ordered, 
+    " (", round(sum(ordered_data$Q15_5_response == "Disagree")/n_ordered*100, 1), "%)\n", sep = "")
+
+cat("\nDid not order test kit (n=", n_not_ordered, "):\n", sep = "")
+cat("  Agree: ", sum(not_ordered_data$Q15_5_response == "Agree"), "/", n_not_ordered, 
+    " (", round(sum(not_ordered_data$Q15_5_response == "Agree")/n_not_ordered*100, 1), "%)\n", sep = "")
+cat("  Disagree: ", sum(not_ordered_data$Q15_5_response == "Disagree"), "/", n_not_ordered, 
+    " (", round(sum(not_ordered_data$Q15_5_response == "Disagree")/n_not_ordered*100, 1), "%)\n", sep = "")
+
+# Fisher's Exact Test
+cat("\n--- Fisher's Exact Test ---\n")
+fisher_result_q15_5 <- fisher.test(cross_tab)
+print(fisher_result_q15_5)
+
+# Create summary table
+q15_5_summary <- tibble(
+  Statement = "People in my life would leave if I had HIV",
+  Response = c("Agree", "Disagree"),
+  `Ordered test kit n` = c(sum(ordered_data$Q15_5_response == "Agree"),
+                           sum(ordered_data$Q15_5_response == "Disagree")),
+  `Ordered test kit N` = n_ordered,
+  `Ordered test kit %` = c(round(sum(ordered_data$Q15_5_response == "Agree")/n_ordered*100, 1),
+                           round(sum(ordered_data$Q15_5_response == "Disagree")/n_ordered*100, 1)),
+  `Did not order n` = c(sum(not_ordered_data$Q15_5_response == "Agree"),
+                        sum(not_ordered_data$Q15_5_response == "Disagree")),
+  `Did not order N` = n_not_ordered,
+  `Did not order %` = c(round(sum(not_ordered_data$Q15_5_response == "Agree")/n_not_ordered*100, 1),
+                        round(sum(not_ordered_data$Q15_5_response == "Disagree")/n_not_ordered*100, 1)),
+  `P-value` = c(round(fisher_result_q15_5$p.value, 3), "—")
+)
+
+kable(q15_5_summary, caption = "Table (c) - Attitudes toward HIV testing: Q15_5") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+```
+
+## Analysis 2: Q94_13 - "I think that new HIV/AIDS treatments can eradicate the virus from your body"
+
+```{r}
+#| label: analysis-q94-13
+
+# Q94_13: I think that new HIV/AIDS treatments can eradicate the virus from your body
+# Scale: 1 (Strongly disagree) to 7 (Strongly agree)
+
+# Filter to valid responses
+q94_13_data <- analysis_df %>%
+  filter(!is.na(ordered_kit) & !is.na(Q94_13) & Q94_13 != 9999)
+
+# Summary statistics by group
+ordered_q94 <- q94_13_data %>% filter(ordered_kit == "Ordered")
+not_ordered_q94 <- q94_13_data %>% filter(ordered_kit == "Did not order")
+
+cat("Ordered test kit (n=", nrow(ordered_q94), "):\n", sep = "")
+cat("  Mean (SD):", round(mean(ordered_q94$Q94_13), 1), "(", round(sd(ordered_q94$Q94_13), 1), ")\n")
+cat("  Median (IQR):", median(ordered_q94$Q94_13), "(", quantile(ordered_q94$Q94_13, 0.25), "-", quantile(ordered_q94$Q94_13, 0.75), ")\n")
+
+cat("\nDid not order test kit (n=", nrow(not_ordered_q94), "):\n", sep = "")
+cat("  Mean (SD):", round(mean(not_ordered_q94$Q94_13), 1), "(", round(sd(not_ordered_q94$Q94_13), 1), ")\n")
+cat("  Median (IQR):", median(not_ordered_q94$Q94_13), "(", quantile(not_ordered_q94$Q94_13, 0.25), "-", quantile(not_ordered_q94$Q94_13, 0.75), ")\n")
+
+# Wilcoxon Rank Sum Test
+cat("\n--- Wilcoxon Rank Sum Test ---\n")
+wilcox_result_q94_13 <- wilcox.test(ordered_q94$Q94_13, not_ordered_q94$Q94_13)
+print(wilcox_result_q94_13)
+
+# Create summary table
+q94_13_summary <- tibble(
+  Statement = "I think that new HIV/AIDS treatments can eradicate the virus from your body",
+  `Ordered test kit (n)` = nrow(ordered_q94),
+  `Ordered Mean (SD)` = paste0(round(mean(ordered_q94$Q94_13), 1), " (", round(sd(ordered_q94$Q94_13), 1), ")"),
+  `Did not order (n)` = nrow(not_ordered_q94),
+  `Did not order Mean (SD)` = paste0(round(mean(not_ordered_q94$Q94_13), 1), " (", round(sd(not_ordered_q94$Q94_13), 1), ")"),
+  `P-value (Wilcoxon)` = round(wilcox_result_q94_13$p.value, 3)
+)
+
+kable(q94_13_summary, caption = "Table (d) - Attitudes toward HIV treatment: Q94_13") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+```
+
+## Analysis 3: Q14_3 - "I could not be friends with someone who has HIV/AIDS"
+
+```{r}
+#| label: analysis-q14-3
+
+# Q14_3: I could not be friends with someone who has HIV/AIDS
+# Scale: 1 = Strongly agree, 2 = Agree, 3 = Somewhat agree, 4 = Neither agree nor disagree,
+#        5 = Somewhat disagree, 6 = Disagree, 7 = Strongly disagree
+
+# Filter to valid responses
+q14_3_data <- analysis_df %>%
+  filter(!is.na(ordered_kit) & !is.na(Q14_3) & Q14_3 != 9999)
+
+# Summary statistics by group
+ordered_q14 <- q14_3_data %>% filter(ordered_kit == "Ordered")
+not_ordered_q14 <- q14_3_data %>% filter(ordered_kit == "Did not order")
+
+cat("Ordered test kit (n=", nrow(ordered_q14), "):\n", sep = "")
+
+print(table(ordered_q14$Q14_3))
+
+cat("\nDid not order test kit (n=", nrow(not_ordered_q14), "):\n", sep = "")
+
+print(table(not_ordered_q14$Q14_3))
+
+# Wilcoxon Rank Sum Test
+cat("\n--- Wilcoxon Rank Sum Test ---\n")
+wilcox_result_q14_3 <- wilcox.test(ordered_q14$Q14_3, not_ordered_q14$Q14_3)
+print(wilcox_result_q14_3)
+
+# Create detailed frequency table
+response_labels <- c("1" = "Strongly agree", "2" = "Agree", "3" = "Somewhat agree", 
+                     "4" = "Neither agree nor disagree", "5" = "Somewhat disagree", 
+                     "6" = "Disagree", "7" = "Strongly disagree")
+
+ordered_freq <- table(ordered_q14$Q14_3)
+not_ordered_freq <- table(not_ordered_q14$Q14_3)
+
+# Create full frequency table including all response levels
+all_levels <- as.character(1:7)
+ordered_counts <- sapply(all_levels, function(x) ifelse(x %in% names(ordered_freq), ordered_freq[x], 0))
+not_ordered_counts <- sapply(all_levels, function(x) ifelse(x %in% names(not_ordered_freq), not_ordered_freq[x], 0))
+
+q14_3_detail <- tibble(
+  `Response` = response_labels[all_levels],
+  `Ordered n` = ordered_counts,
+  `Ordered N` = nrow(ordered_q14),
+  `Ordered %` = round(ordered_counts / nrow(ordered_q14) * 100, 1),
+  `Not ordered n` = not_ordered_counts,
+  `Not ordered N` = nrow(not_ordered_q14),
+  `Not ordered %` = round(not_ordered_counts / nrow(not_ordered_q14) * 100, 1)
+)
+
+kable(q14_3_detail, caption = "Table (e) - HIV-related stigma: Q14_3 - I could not be friends with someone who has HIV/AIDS") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE) %>%
+  footnote(general = paste0("P-value (Wilcoxon rank test) = ", round(wilcox_result_q14_3$p.value, 3)))
+```
+
+# Conclusions
+
+The secondary outcomes have been reproduced. All p-values match the manuscript (the result of the Analysis 3 is slightly different from the manuscript with a p-value of 0.033, but the conclusion is the same).
